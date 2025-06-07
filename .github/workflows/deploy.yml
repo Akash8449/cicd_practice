@@ -32,8 +32,26 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Deploy to Lambda
+    - name: Deploy to Lambda (Create or Update)
       run: |
-        aws lambda update-function-code \
-          --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-          --zip-file fileb://lambda.zip
+        set -e
+
+        # Check if Lambda function exists
+        if aws lambda get-function --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} 2>/dev/null; then
+          echo "Lambda function exists. Updating code..."
+          aws lambda update-function-code \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --zip-file fileb://lambda.zip
+        else
+          echo "Lambda function does not exist. Creating function..."
+
+          # Create IAM Role ARN with basic Lambda permissions beforehand and add to GitHub secrets
+          aws lambda create-function \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --runtime python3.11 \
+            --role ${{ secrets.LAMBDA_ROLE_ARN }} \
+            --handler lambda_function.lambda_handler \
+            --zip-file fileb://lambda.zip \
+            --timeout 30 \
+            --memory-size 256
+        fi
